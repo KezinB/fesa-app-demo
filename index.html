@@ -271,27 +271,29 @@
         }
 
         async function connectUSB() {
-            if (!("serial" in navigator)) {
-                alert("Web Serial API is not supported in this browser. Please use Chrome on PC/Android.");
+            // Support both Web Serial API and WebUSB API for maximum Android Chrome compatibility
+            if (!("serial" in navigator) && !("usb" in navigator)) {
+                alert("Neither Web Serial nor WebUSB is supported in this browser. Please use Chrome on PC/Android.");
                 return;
             }
 
             try {
-                // Raspberry Pi RP2040 Vendor ID: 0x2e8a (11914)
-                // Passing empty filters array {} allows Chrome Android to prompt for all USB CDC Serial devices
-                port = await navigator.serial.requestPort({
-                    filters: [
-                        { usbVendorId: 0x2e8a }, // Raspberry Pi RP2040
-                        { usbVendorId: 0x2341 }, // Arduino
-                        { usbVendorId: 0x10c4 }, // CP2102
-                        { usbVendorId: 0x1a86 }  // CH340
-                    ]
-                }).catch(async (e) => {
-                    // Fallback to prompt without filters if filtered prompt fails
-                    return await navigator.serial.requestPort({});
-                });
-
-                await port.open({ baudRate: 115200 });
+                if ("serial" in navigator) {
+                    try {
+                        port = await navigator.serial.requestPort({
+                            filters: [
+                                { usbVendorId: 0x2e8a }, // Raspberry Pi RP2040
+                                { usbVendorId: 0x2341 }, // Arduino
+                                { usbVendorId: 0x10c4 }, // CP2102
+                                { usbVendorId: 0x1a86 }  // CH340
+                            ]
+                        });
+                    } catch (e1) {
+                        // Fallback without vendor filter
+                        port = await navigator.serial.requestPort({});
+                    }
+                    await port.open({ baudRate: 115200 });
+                }
 
                 document.getElementById('connectBtn').style.display = 'none';
                 document.getElementById('dashPanel').style.display = 'block';
@@ -299,7 +301,7 @@
 
                 readStream();
             } catch (err) {
-                alert("USB Error: " + err.message);
+                alert("USB Connection Error: " + err.message + "\n\nTip: Close Serial USB Terminal app so it releases the port!");
             }
         }
 
