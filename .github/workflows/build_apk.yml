@@ -1,8 +1,8 @@
-name: Build FeSa Android APK
+name: Build FeSa Flutter Release APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, mobile-app ]
   workflow_dispatch:
 
 jobs:
@@ -26,14 +26,12 @@ jobs:
 
       - name: Get Dependencies
         run: flutter pub get
-        working-directory: ./projects/FeSa/mobile_app
 
       - name: Build Release APK
         run: flutter build apk --release
-        working-directory: ./projects/FeSa/mobile_app
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v3
         with:
           name: FeSa-Diagnostic-App
-          path: projects/FeSa/mobile_app/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
