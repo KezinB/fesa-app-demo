@@ -277,7 +277,20 @@
             }
 
             try {
-                port = await navigator.serial.requestPort();
+                // Raspberry Pi RP2040 Vendor ID: 0x2e8a (11914)
+                // Passing empty filters array {} allows Chrome Android to prompt for all USB CDC Serial devices
+                port = await navigator.serial.requestPort({
+                    filters: [
+                        { usbVendorId: 0x2e8a }, // Raspberry Pi RP2040
+                        { usbVendorId: 0x2341 }, // Arduino
+                        { usbVendorId: 0x10c4 }, // CP2102
+                        { usbVendorId: 0x1a86 }  // CH340
+                    ]
+                }).catch(async (e) => {
+                    // Fallback to prompt without filters if filtered prompt fails
+                    return await navigator.serial.requestPort({});
+                });
+
                 await port.open({ baudRate: 115200 });
 
                 document.getElementById('connectBtn').style.display = 'none';
