@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FeSa Demo 2 — Advanced Clinical WebUSB Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0b132b;
+            --card-bg: #1c2541;
+            --card-header: #3a506b;
+            --accent-teal: #48cae4;
+            --accent-blue: #0077b6;
+            --accent-green: #38b000;
+            --accent-yellow: #ffb703;
+            --accent-red: #d90429;
+            --text-main: #edf2f4;
+            --text-muted: #8d99ae;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            color: var(--accent-teal);
+        }
+
+        .header p {
+            margin: 4px 0 0 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .col {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-green { background: linear-gradient(135deg, #2b9348, var(--accent-green)); }
+        .btn-yellow { background: linear-gradient(135deg, #d4a373, var(--accent-yellow)); color: #111; }
+        .btn-red { background: linear-gradient(135deg, #a71e34, var(--accent-red)); }
+
+        .status-pill {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: rgba(141, 153, 174, 0.2);
+            color: var(--text-muted);
+        }
+
+        .status-pill.measuring { background: rgba(255, 183, 3, 0.2); color: var(--accent-yellow); }
+        .status-pill.complete { background: rgba(56, 176, 0, 0.2); color: var(--accent-green); }
+
+        .metric-card {
+            background: rgba(11, 19, 43, 0.6);
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        .metric-card .val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--accent-teal);
+            margin-top: 4px;
+        }
+
+        .metric-card .lbl {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .chart-box {
+            position: relative;
+            height: 220px;
+            margin-top: 10px;
+        }
+
+        input[type="text"], select {
+            background: #0b132b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🩸 FeSa Clinical Diagnostic WebApp</h1>
+        <p>Demo 2 — RP2040 MCP3425 (16-Bit) + AD5160 Telemetry Dashboard</p>
+    </div>
+
+    <div class="container">
+        
+        <!-- Connection & Patient Bar -->
+        <div class="card">
+            <div class="row" style="align-items: center;">
+                <div class="col" style="flex: 2;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted);">PATIENT ID / SAMPLE METADATA</label>
+                    <input type="text" id="patientId" value="PAT-2026-0809 (Saliva 30µL)" placeholder="Enter Patient ID...">
+                </div>
+                <div class="col" style="flex: 1; display: flex; align-items: flex-end;">
+                    <button id="connectBtn" class="btn" onclick="connectUSB()" style="width: 100%;">
+                        🔌 Connect USB
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Main Panel -->
+        <div id="dashPanel" class="card" style="display: none;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div id="statusPill" class="status-pill">IDLE</div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-green" onclick="triggerState('MEASURING')">▶ Start Test</button>
+                    <button class="btn btn-yellow" onclick="triggerState('AUTO_RANGING')">⚡ Auto-Range</button>
+                    <button class="btn btn-red" onclick="exportCSV()">📥 Export CSV</button>
+                </div>
+            </div>
+
+            <!-- Key Clinical Metrics -->
+            <div class="row">
+                <div class="col">
+                    <div class="metric-card">
+                        <div class="lbl">Anemia Risk Score</div>
+                        <div class="val" id="riskVal" style="color: var(--accent-teal);">0.0%</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="metric-card">
+                        <div class="lbl">Salivary Ferritin</div>
+                        <div class="val" id="ferritinVal" style="color: var(--accent-green);">28.5 ng/mL</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="metric-card">
+                        <div class="lbl">Strip R (rGO)</div>
+                        <div class="val" id="rStripVal">45.0 kΩ</div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="metric-card">
+                        <div class="lbl">V_out (ADC)</div>
+                        <div class="val" id="vOutVal">1650 mV</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Binding Curve Chart -->
+            <div class="chart-box">
+                <canvas id="bindingChart"></canvas>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        let port, reader, writer, chart;
+        let loggedRows = [];
+
+        function initChart() {
+            const ctx = document.getElementById('bindingChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'R_strip (kΩ)',
+                            data: [],
+                            borderColor: '#48cae4',
+                            backgroundColor: 'rgba(72, 202, 228, 0.1)',
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'V_out (mV)',
+                            data: [],
+                            borderColor: '#ffb703',
+                            borderDash: [4, 4],
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#8d99ae' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#8d99ae' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    },
+                    plugins: { legend: { labels: { color: '#edf2f4' } } }
+                }
+            });
+        }
+
+        async function connectUSB() {
+            if (!("serial" in navigator)) {
+                alert("Web Serial API is not supported in this browser. Please use Chrome on PC/Android.");
+                return;
+            }
+
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('dashPanel').style.display = 'block';
+                initChart();
+
+                readStream();
+            } catch (err) {
+                alert("USB Error: " + err.message);
+            }
+        }
+
+        async function readStream() {
+            const textDecoder = new TextDecoderStream();
+            const closed = port.readable.pipeTo(textDecoder.writable);
+            reader = textDecoder.readable.getReader();
+            let buf = "";
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += value;
+                const lines = buf.split('\n');
+                buf = lines.pop();
+
+                for (const l of lines) {
+                    if (l.trim().startsWith('{')) {
+                        try {
+                            const data = JSON.parse(l.trim());
+                            if (data.state) updateUI(data);
+                        } catch (e) {}
+                    }
+                }
+            }
+        }
+
+        function updateUI(data) {
+            document.getElementById('riskVal').innerText = data.risk_pct.toFixed(1) + "%";
+            document.getElementById('ferritinVal').innerText = data.ferritin_ng_ml.toFixed(1) + " ng/mL";
+            document.getElementById('rStripVal').innerText = (data.r_strip_ohm / 1000).toFixed(1) + " kΩ";
+            document.getElementById('vOutVal').innerText = data.v_out_mv.toFixed(0) + " mV";
+
+            const pill = document.getElementById('statusPill');
+            pill.innerText = data.state;
+            if (data.state === 'MEASURING') pill.className = 'status-pill measuring';
+            else if (data.state === 'COMPLETE') pill.className = 'status-pill complete';
+            else pill.className = 'status-pill';
+
+            // Store for CSV Export
+            loggedRows.push({
+                timestamp: new Date().toISOString(),
+                patient: document.getElementById('patientId').value,
+                state: data.state,
+                cycle: data.cycle,
+                r_strip_ohm: data.r_strip_ohm,
+                v_out_mv: data.v_out_mv,
+                risk_pct: data.risk_pct,
+                ferritin_ng_ml: data.ferritin_ng_ml
+            });
+
+            // Update Chart
+            chart.data.labels.push(data.cycle);
+            chart.data.datasets[0].data.push(data.r_strip_ohm / 1000);
+            chart.data.datasets[1].data.push(data.v_out_mv);
+            if (chart.data.labels.length > 40) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            chart.update('none');
+        }
+
+        function exportCSV() {
+            if (loggedRows.length === 0) {
+                alert("No test telemetry data logged yet.");
+                return;
+            }
+            let csv = "timestamp,patient_id,state,cycle,r_strip_ohm,v_out_mv,risk_pct,ferritin_ng_ml\n";
+            loggedRows.forEach(r => {
+                csv += `${r.timestamp},"${r.patient}",${r.state},${r.cycle},${r.r_strip_ohm},${r.v_out_mv},${r.risk_pct},${r.ferritin_ng_ml}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `FeSa_Test_${Date.now()}.csv`;
+            a.click();
+        }
+    </script>
+</body>
+</html>
